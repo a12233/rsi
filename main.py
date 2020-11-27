@@ -1,14 +1,15 @@
 from pprint import pprint
-from finsymbols import symbols
-from alpha_vantage.timeseries import TimeSeries
-from alpha_vantage.techindicators import TechIndicators 
+# from finsymbols import symbols
+# from alpha_vantage.timeseries import TimeSeries
+# from alpha_vantage.techindicators import TechIndicators 
 from pandas import DataFrame, Series
 import csv
 import sqlite3
-import yfinance as yf
+# import yfinance as yf
 # import talib 
 import numpy
 from functools import lru_cache
+from polygon import RESTClient
 
 # for alpha vantage
 API_KEY = '5YWG8X1KMLO1AZLM'
@@ -83,7 +84,19 @@ def getSP200DMA():
     
     print(cache)
     conn.close()
+def testPolygon(): 
+    key = "AKAMCR3KUKCLZS12NRIA"
+
+    # RESTClient can be used as a context manager to facilitate closing the underlying http session
+    # https://requests.readthedocs.io/en/master/user/advanced/#session-objects
+
+    with RESTClient(key) as client:
+        for s in sp500List: 
+            stock = s[0]
+            resp = client.stocks_equities_daily_open_close(stock[0], "2018-03-02")
+            print(f"On: {resp.from_} {stock[0]} opened at {resp.open} and closed at {resp.close}")
 
 if __name__ == "__main__":
     # getSP200DMA()
     # getSP200DMA()
+    testPolygon()
