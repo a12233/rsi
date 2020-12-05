@@ -1,13 +1,14 @@
 from pprint import pprint
-# from finsymbols import symbols
-# from alpha_vantage.timeseries import TimeSeries
-# from alpha_vantage.techindicators import TechIndicators 
+from finsymbols import symbols
+from alpha_vantage.timeseries import TimeSeries
+from alpha_vantage.techindicators import TechIndicators 
 from pandas import DataFrame, Series
 import csv
 import sqlite3
-# import yfinance as yf
+import yfinance as yf
 # import talib 
-import numpy
+import pandas as pd
+import numpy as np
 from functools import lru_cache
 from polygon import RESTClient
 
@@ -39,10 +40,10 @@ def test():
     lastWma = data.tail(1).WMA
     pprint(lastPrice/lastWma)
 
-def testTALib(): 
-    close = numpy.random.random(100)
-    output = talib.SMA(close)
-    return output
+# def testTALib(): 
+#     close = numpy.random.random(100)
+#     output = talib.SMA(close)
+#     return output
 
 
 def writeCSV():
@@ -56,12 +57,53 @@ def writeCSV():
         write.writerows(sp500List) 
 
 def testYfinance(): 
-    t = yf.Ticker('BRK-B')
-    # print(typeof(msft.info))
-    test = t.info
-    # print(test)
-    print(t.info.get('fiftyDayAverage'))
-    print(t.info.get('twoHundredDayAverage'))
+    symbol = 'AAPL'
+    cache = {}
+    conn = sqlite3.connect('aapl.db')
+    c = conn.cursor()
+    # c.execute('''CREATE TABLE IF NOT EXISTS stocks
+    #          (symbol,data) ''')
+    c.execute(f"""SELECT count(*) FROM sqlite_master WHERE type=\'table\' AND name=\'{symbol}\';""")
+    flag = c.fetchall() 
+    if flag[0][0] == 0:
+        data = yf.Ticker('AAPL').history(period="max")
+        data.to_sql(symbol, conn, schema=None, if_exists='fail', index=True, index_label=None, chunksize=None, dtype=None, method=None)
+    else: 
+        df = pd.read_sql(f"""SELECT * FROM {symbol}""", conn)
+        df['Date'] = pd.to_datetime(df['Date'])
+        print(df.tail())
+        print (df['Date'].dtype)
+        df['year'] = df['Date'].dt.year
+        df['month'] = df['Date'].dt.month
+        df['day'] = df['Date'].dt.day
+        df['close'] = df['Close']
+        df = df.asfreq('B')
+
+        # using close prices
+        prices = df.close.copy()
+        print(df)
+        # we convert to DataFrame to make easy store more series.
+        results_storage = prices.to_frame().copy()
+        # print(results_storage)
+
+        # results_storage['year'] = df['year']
+        # results_storage['month'] = df['month']
+        # results_storage['day'] = df['day']
+        results_storage['year'] = prices.index.year
+        results_storage['month'] = prices.index.month
+        results_storage['day'] = prices.index.day
+        results_storage['week_day'] = prices.index.dayofweek
+        results_storage['week_day_name'] = prices.index.strftime('%A')
+        print(results_storage)
+        approach3 = results_storage.asfreq('BM')\
+                                .set_index(['year', 'month'])\
+                                .close\
+                                .pct_change()
+        print(approach3.tail(10))
+    conn.close()
+    return 
+
+
 
 def getSP200DMA(): 
     cache = {}
@@ -99,4 +141,4 @@ def testPolygon():
 if __name__ == "__main__":
     # getSP200DMA()
     # getSP200DMA()
-    testPolygon()
+    testYfinance()
