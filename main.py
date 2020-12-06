@@ -11,6 +11,7 @@ import pandas as pd
 import numpy as np
 from functools import lru_cache
 from polygon import RESTClient
+import pandas_datareader as pdr
 
 # for alpha vantage
 API_KEY = '5YWG8X1KMLO1AZLM'
@@ -69,16 +70,22 @@ def testYfinance():
         data = yf.Ticker('AAPL').history(period="max")
         data.to_sql(symbol, conn, schema=None, if_exists='fail', index=True, index_label=None, chunksize=None, dtype=None, method=None)
     else: 
-        df = pd.read_sql(f"""SELECT * FROM {symbol}""", conn)
+        df = pdr.get_data_yahoo('AAPL', 2014, '20200926')
+        print(df.head())
+
+        # df = pd.read_sql(f"""SELECT * FROM {symbol}""", conn)
         df['Date'] = pd.to_datetime(df['Date'])
-        print(df.tail())
         print (df['Date'].dtype)
         df['year'] = df['Date'].dt.year
         df['month'] = df['Date'].dt.month
         df['day'] = df['Date'].dt.day
+        df['week_day'] = df['Date'].dt.dayofweek
+        df['week_day_name'] = df['Date'].dt.strftime('%A')
         df['close'] = df['Close']
-        df = df.asfreq('B')
-
+        # df = df.asfreq('BM')
+        # what about NaNs
+        df.isnull().sum()
+        df.ffill(inplace=True)  # to avoid problems with NaNs.
         # using close prices
         prices = df.close.copy()
         print(df)
@@ -86,19 +93,18 @@ def testYfinance():
         results_storage = prices.to_frame().copy()
         # print(results_storage)
 
-        # results_storage['year'] = df['year']
-        # results_storage['month'] = df['month']
-        # results_storage['day'] = df['day']
-        results_storage['year'] = prices.index.year
-        results_storage['month'] = prices.index.month
-        results_storage['day'] = prices.index.day
-        results_storage['week_day'] = prices.index.dayofweek
-        results_storage['week_day_name'] = prices.index.strftime('%A')
-        print(results_storage)
-        approach3 = results_storage.asfreq('BM')\
-                                .set_index(['year', 'month'])\
-                                .close\
-                                .pct_change()
+        results_storage['year'] = df['year']
+        results_storage['month'] = df['month']
+        results_storage['day'] = df['day']
+        results_storage['week_day'] = df['week_day']
+        results_storage['week_day_name'] = df['week_day_name']   
+        # results_storage['year'] = prices.index.year
+        # results_storage['month'] = prices.index.month
+        # results_storage['day'] = prices.index.day
+        # results_storage['week_day'] = prices.index.dayofweek
+        # results_storage['week_day_name'] = prices.index.strftime('%A')
+        # print(results_storage)
+        approach3 = results_storage.asfreq('BM').set_index(['year','month']).close.pct_change()
         print(approach3.tail(10))
     conn.close()
     return 
@@ -141,4 +147,35 @@ def testPolygon():
 if __name__ == "__main__":
     # getSP200DMA()
     # getSP200DMA()
-    testYfinance()
+    # testYfinance()
+    today = '20200926'  # to make static this script.
+    tckr = 'BBAS3.SA'  # Banco do Brasil SA
+    # download data
+    data = pdr.get_data_yahoo(tckr, 2014, today)
+    data = data.asfreq('B')  # add frequency needed for some pandas functionalities releated with offsets
+    data.columns = data.columns.map(lambda col: col.lower())
+    data.head()  # first values
+    print(data.tail())  # last values
+
+    # what about NaNs
+    data.isnull().sum()
+    data.ffill(inplace=True)  # to avoid problems with NaNs.
+
+    # using close prices
+    prices = data.close.copy()
+    # we convert to DataFrame to make easy store more series.
+    results_storage = prices.to_frame().copy()
+
+
+    # extract some date information
+    results_storage['year'] = prices.index.year
+    results_storage['month'] = prices.index.month
+    results_storage['day'] = prices.index.day
+    results_storage['week_day'] = prices.index.dayofweek
+    results_storage['week_day_name'] = prices.index.strftime('%A')
+    print(results_storage.tail(10))
+    approach3 = results_storage.asfreq('BY')\
+                            .set_index(['year'])\
+                            .close\
+                            .pct_change()
+    print(approach3.tail(10))    
