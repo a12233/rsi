@@ -12,6 +12,10 @@ import numpy as np
 from functools import lru_cache
 from polygon import RESTClient
 import pandas_datareader as pdr
+import json
+from datetime import datetime, timedelta
+from dateutil.relativedelta import relativedelta
+from pandas.tseries.offsets import BDay
 
 # for alpha vantage
 API_KEY = '5YWG8X1KMLO1AZLM'
@@ -139,15 +143,22 @@ def testPolygon():
     # https://requests.readthedocs.io/en/master/user/advanced/#session-objects
 
     with RESTClient(key) as client:
-        for s in sp500List: 
-            stock = s[0]
-            resp = client.stocks_equities_daily_open_close(stock[0], "2018-03-02")
-            print(f"On: {resp.from_} {stock[0]} opened at {resp.open} and closed at {resp.close}")
 
-if __name__ == "__main__":
-    # getSP200DMA()
-    # getSP200DMA()
-    # testYfinance()
+        response = client.reference_stock_financials("AAPL", limit=1, type="Y")
+
+        # resp = client.stocks_equities_daily_open_close("AAPL", "2018-03-02")
+        # print(f"On: {resp.from_} {stock[0]} opened at {resp.open} and closed at {resp.close}")
+        print(deseralize(response))
+
+def deseralize(blob):
+    attribute = ['ticker','revenuesUSD', 'marketCapitalization', 'grossProfit', 'netCashFlowFromOperations']
+    res = dict.fromkeys(attribute)
+    for i in attribute: 
+        response = blob.results[0]
+        res[i] = response[i]
+    return res 
+
+def testPandaReader(): 
     today = '20200926'  # to make static this script.
     tckr = 'BBAS3.SA'  # Banco do Brasil SA
     # download data
@@ -179,3 +190,88 @@ if __name__ == "__main__":
                             .close\
                             .pct_change()
     print(approach3.tail(10))    
+            
+def getFundamentals():            
+    # revenue, market cap, gross profit, operating cash flow, (6mo, ytd, 3y, 5y) price % change
+    key = "AKAMCR3KUKCLZS12NRIA"
+    result = []
+    stockList = ['AAPL', 'ADBE', 'ALGN', 'AMZN']
+    with RESTClient(key) as client:
+        for i in stockList: 
+            response = client.reference_stock_financials(i, limit=1, type="Y")
+            result.append(deseralize(response))
+
+    return result
+
+def getPriceChange():
+    symbol = 'AAPL'
+    cache = {}
+    conn = sqlite3.connect('prices.db')
+    c = conn.cursor()
+    c.execute(f"""SELECT count(*) FROM sqlite_master WHERE type=\'table\' AND name=\'{symbol}\';""")
+    flag = c.fetchall() 
+    if flag[0][0] == 0:
+        data = yf.Ticker('AAPL').history(period="max")
+        data.to_sql(symbol, conn, schema=None, if_exists='fail', index=True, index_label=None, chunksize=None, dtype=None, method=None)
+    else: 
+        df = pd.read_sql(f"""SELECT * FROM {symbol}""", conn)
+        df['Date'] = pd.to_datetime(df['Date'])
+        # df['date'] = df['Date'].to_pydatetime()
+
+        ts = pd.Timestamp.now()
+  
+        # Create an offset of 10 Business days and 10 hours 
+        bd = pd.tseries.offsets.BusinessDay(offset = timedelta(days = -5*365)) 
+        new_timestamp = ts + bd 
+        dateMinus5year = pd.to_datetime(new_timestamp, format="%Y-%m-%d")
+
+        six_mo_ago = datetime.now() - relativedelta(month=6)
+        three_yrs_ago = datetime.now() - relativedelta(years=3)
+        five_yrs_ago = datetime.now() - relativedelta(years=5)
+
+
+
+        three_years = three_yrs_ago.strftime("%Y-%m-%d")
+        five_years = five_yrs_ago.strftime("%Y-%m-%d")
+        six_mo = six_mo_ago.strftime("%Y-%m-%d")
+
+        dateMinus3 = pd.to_datetime(three_years, format="%Y-%m-%d")
+        dateMinus5 = pd.to_datetime(five_years, format="%Y-%m-%d")
+        dateMinus6mo = pd.to_datetime(six_mo, format="%Y-%m-%d")
+
+
+        if six_mo_ago.day == 6:
+            bd = pd.tseries.offsets.BusinessDay(offset = timedelta(days = 2)) 
+            dateMinus6mo = dateMinus6mo + bd
+        if six_mo_ago.day == 7:
+            bd = pd.tseries.offsets.BusinessDay(offset = timedelta(days = 1)) 
+            dateMinus6mo = dateMinus6mo + bd
+
+        print(df.tail(1))
+        print(df.loc[df['Date'] == dateMinus3])
+        print(df.loc[df['Date'] == dateMinus5])
+        # print(df.loc[df['Date'] == dateMinus5year])
+
+        print(df.loc[df['Date'] == dateMinus6mo])
+        data = yf.Ticker('AAPL').history(period="ytd")
+        print(data.head(1))
+
+
+
+    conn.close()
+    return 
+
+def testDiff():
+    data = pdr.get_data_yahoo("AAPL", 2015, 2020)
+    data2 = yf.Ticker('AAPL').history(period="5yr")
+    data2.columns = data2.columns.map(lambda col: col.lower())
+    data.compare(data2)
+
+if __name__ == "__main__":
+    # getSP200DMA()
+    # getSP200DMA()
+    # testYfinance()
+    # print(getFundamentals())         
+    # testPolygon()   
+    # testDiff()
+    getPriceChange()
