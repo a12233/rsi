@@ -16,6 +16,7 @@ import json
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
 from pandas.tseries.offsets import BDay
+from pandas.tseries import offsets
 
 # for alpha vantage
 API_KEY = '5YWG8X1KMLO1AZLM'
@@ -218,18 +219,11 @@ def getPriceChange():
         df['Date'] = pd.to_datetime(df['Date'])
         # df['date'] = df['Date'].to_pydatetime()
 
-        ts = pd.Timestamp.now()
-  
-        # Create an offset of 10 Business days and 10 hours 
-        bd = pd.tseries.offsets.BusinessDay(offset = timedelta(days = -5*365)) 
-        new_timestamp = ts + bd 
-        dateMinus5year = pd.to_datetime(new_timestamp, format="%Y-%m-%d")
-
         six_mo_ago = datetime.now() - relativedelta(month=6)
         three_yrs_ago = datetime.now() - relativedelta(years=3)
         five_yrs_ago = datetime.now() - relativedelta(years=5)
-
-
+        year_start = "2020-01-02"
+        test = datetime.strptime(year_start, '%Y-%m-%d')
 
         three_years = three_yrs_ago.strftime("%Y-%m-%d")
         five_years = five_yrs_ago.strftime("%Y-%m-%d")
@@ -238,25 +232,32 @@ def getPriceChange():
         dateMinus3 = pd.to_datetime(three_years, format="%Y-%m-%d")
         dateMinus5 = pd.to_datetime(five_years, format="%Y-%m-%d")
         dateMinus6mo = pd.to_datetime(six_mo, format="%Y-%m-%d")
+        year_start_date = pd.to_datetime(test, format="%Y-%m-%d")
 
-
-        if six_mo_ago.day == 6:
-            bd = pd.tseries.offsets.BusinessDay(offset = timedelta(days = 2)) 
-            dateMinus6mo = dateMinus6mo + bd
-        if six_mo_ago.day == 7:
-            bd = pd.tseries.offsets.BusinessDay(offset = timedelta(days = 1)) 
-            dateMinus6mo = dateMinus6mo + bd
-
+        timeList = [dateMinus6mo, dateMinus3, dateMinus5, year_start_date]
+        timeMap = {six_mo_ago: dateMinus6mo, three_yrs_ago : dateMinus3, five_yrs_ago : dateMinus5, test : year_start_date}
+        res = {dateMinus6mo: 0, dateMinus3 : 0, dateMinus5 : 0, year_start_date : 0}
+        # print(df.tail(1))
+        # print(df.loc[df['Date'] == year_start_date])
         print(df.tail(1))
-        print(df.loc[df['Date'] == dateMinus3])
-        print(df.loc[df['Date'] == dateMinus5])
-        # print(df.loc[df['Date'] == dateMinus5year])
+        for time in timeList:
+            if time.dayofweek == 5:
+                bd = pd.tseries.offsets.BusinessDay(offset = timedelta(days = 2)) 
+                time += bd 
+            if time.day == 6:
+                bd = pd.tseries.offsets.BusinessDay(offset = timedelta(days = 1)) 
+                time += bd 
+            temp_df = df.loc[df['Date'] == time]
+            temp_df_two = df.tail(1)
+            print(temp_df)
+            # res_df = temp_df_two.div(temp_df)
+            # print(df.loc[df['Date'] == timeMap[time]])
+            # print(temp_df_two['Close'] )
+            res[time] = temp_df_two.iloc[0]['Close'] / temp_df.iloc[0]['Close']
 
-        print(df.loc[df['Date'] == dateMinus6mo])
-        data = yf.Ticker('AAPL').history(period="ytd")
-        print(data.head(1))
-
-
+        for i,v in res.items(): 
+            print(i.to_pydatetime())
+            print(v)
 
     conn.close()
     return 
@@ -274,4 +275,6 @@ if __name__ == "__main__":
     # print(getFundamentals())         
     # testPolygon()   
     # testDiff()
+    # a = pd.Timestamp.now() - offsets.YearBegin()
+    # print(a)
     getPriceChange()
